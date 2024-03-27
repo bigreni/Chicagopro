@@ -5,76 +5,16 @@ function onLoad() {
         notFirstUse();
     }
 }
-var admobid = {};
-if (/(android)/i.test(navigator.userAgent)) {
-    admobid = { // for Android
-        banner: 'ca-app-pub-1683858134373419/7790106682',
-        interstitial:'ca-app-pub-9249695405712287/3927718795'
-    };
-} else if(/(ipod|iphone|ipad)/i.test(navigator.userAgent)) { // for ios
-admobid = {
-  banner: 'ca-app-pub-1683858134373419/7790106682', 
-  interstitial: 'ca-app-pub-9249695405712287/5312118508'
-};
-}
 
-function initApp() {
-    if (!AdMob) { alert('admob plugin not ready'); return; }
-    initAd();
-    //display interstitial at startup
-    loadInterstitial();
-}
-function initAd() {
-    var defaultOptions = {
-        position: AdMob.AD_POSITION.BOTTOM_CENTER,
-        bgColor: 'black', // color name, or '#RRGGBB'
-        isTesting: false // set to true, to receiving test ad for testing purpose
-    };
-    AdMob.setOptions(defaultOptions);
-    registerAdEvents();
-}
-// optional, in case respond to events or handle error
-function registerAdEvents() {
-    // new events, with variable to differentiate: adNetwork, adType, adEvent
-    document.addEventListener('onAdFailLoad', function (data) {
-        document.getElementById('screen').style.display = 'none';     
-    });
-    document.addEventListener('onAdLoaded', function (data) {
-        document.getElementById("screen").style.display = 'none';     
-        //AdMob.showInterstitial();
-    });
-    document.addEventListener('onAdPresent', function (data) { });
-    document.addEventListener('onAdLeaveApp', function (data) { 
-        document.getElementById("screen").style.display = 'none';     
-    });
-    document.addEventListener('onAdDismiss', function (data) { 
-        document.getElementById('screen').style.display = 'none';     
-    });
-}
-
-function createSelectedBanner() {
-      AdMob.createBanner({adId:admobid.banner});
-}
-
-function loadInterstitial() {
-    if ((/(android|windows phone)/i.test(navigator.userAgent))) {
-        AdMob.prepareInterstitial({ adId: admobid.interstitial, isTesting: false, autoShow: false });
-    } else if ((/(ipad|iphone|ipod)/i.test(navigator.userAgent))) {
-        AdMob.prepareInterstitial({ adId: admobid.interstitial, isTesting: false, autoShow: false });
-    } else
-    {
-        document.getElementById("screen").style.display = 'none';     
-    }
-}
 
 function checkFirstUse()
 {
+    $("span").remove();
     $(".dropList").select2();
-    initApp();
-    //askRating();
-    //window.ga.startTrackerWithId('UA-88579601-15', 1, function(msg) {
-    //    window.ga.trackView('Home');
-    //});  
+    //checkConsent();
+    checkPermissions();
+    //document.getElementById('screen').style.display = 'none';     
+    askRating();
     document.getElementById('screen').style.display = 'none';     
 }
 
@@ -86,23 +26,72 @@ function notFirstUse()
 
 function askRating()
 {
-AppRate.preferences = {
-openStoreInApp: true,
-useLanguage:  'en',
-usesUntilPrompt: 10,
-promptAgainForEachNewVersion: true,
+    const appRatePlugin = AppRate;
+    appRatePlugin.setPreferences({
+        reviewType: {
+            ios: 'AppStoreReview',
+            android: 'InAppBrowser'
+            },
+  useLanguage:  'en',
+  usesUntilPrompt: 10,
+  promptAgainForEachNewVersion: true,
 storeAppURL: {
             ios: '1369778129',
             android: 'market://details?id=com.chicago.free'
            }
-};
+});
 
 AppRate.promptForRating(false);
 }
 
+async function checkConsent(){
+    if (cordova.platformId === 'ios') {
+        const status = await consent.trackingAuthorizationStatus()
+        /*
+          trackingAuthorizationStatus:
+          0 = notDetermined
+          1 = restricted
+          2 = denied
+          3 = authorized
+        */
+        const statusNew = await consent.requestTrackingAuthorization()
+      }
+    
+      const consentStatus = await consent.getConsentStatus()
+      if (consentStatus === consent.ConsentStatus.Required) {
+        await consent.requestInfoUpdate()
+      }
+    
+      const formStatus = await consent.getFormStatus()
+      if (formStatus === consent.FormStatus.Available) {
+          const form = await consent.loadForm()
+          form.show()
+      }
+}
+
+
+function checkPermissions(){
+    const idfaPlugin = cordova.plugins.idfa;
+
+    idfaPlugin.getInfo()
+        .then(info => {
+            if (!info.trackingLimited) {
+                return info.idfa || info.aaid;
+            } else if (info.trackingPermission === idfaPlugin.TRACKING_PERMISSION_NOT_DETERMINED) {
+                return idfaPlugin.requestPermission().then(result => {
+                    if (result === idfaPlugin.TRACKING_PERMISSION_AUTHORIZED) {
+                        return idfaPlugin.getInfo().then(info => {
+                            return info.idfa || info.aaid;
+                        });
+                    }
+                });
+            }
+        });
+}
+ 
+
 function loadFaves()
 {
-showAd();
 window.location = "Favorites.html";
 }
 
@@ -161,7 +150,6 @@ function processXmlDocumentStops(result)
 }
 
 function getArrivalTimes() {
-showAd();
 reset();   
 var allRoutes = document.getElementById('allRoutes');
 var url = encodeURI("https://ctabustracker.com/bustime/api/v3/getpredictions?requestType=getpredictions&locale=en&stpid=" + $("#MainMobileContent_stopList").val() + "&rt=" + $("#MainMobileContent_routeList").val() + "&dir=" + $("#MainMobileContent_directionList").val() + "&rtpidatafeed=bustime&key=uR2atLdE8JtiTVjXhrxDE2Yz9&format=json");
@@ -244,14 +232,4 @@ if (allRoutes != null) {
     }
     localStorage.setItem("Favorites", favStop);
     $("#message").text('Stop added to favorites!!');
-}
-
-function showAd()
-{
-document.getElementById("screen").style.display = 'block';     
-    AdMob.isInterstitialReady(function(isready){
-        if(isready) 
-            AdMob.showInterstitial();
-    });
-document.getElementById("screen").style.display = 'none'; 
 }
